@@ -1,0 +1,1729 @@
+
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>THE LAST MAGICIAN | Cinematic Story</title>
+
+<style>
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: #03050b;
+  color: white;
+  font-family: Arial, sans-serif;
+  overflow: hidden;
+}
+
+#app {
+  width: 100%;
+  height: 100dvh;
+  position: relative;
+  background: #050913;
+}
+
+canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+#top {
+  position: absolute;
+  top: 0;
+  width: 100%;
+  padding: 16px;
+  text-align: center;
+  background: linear-gradient(#02040bd9, transparent);
+  pointer-events: none;
+}
+
+#logo {
+  color: #8eeaff;
+  font-size: 13px;
+  letter-spacing: 5px;
+  font-weight: bold;
+}
+
+#sceneName {
+  margin-top: 7px;
+  font-size: 11px;
+  color: #b6c8df;
+  letter-spacing: 2px;
+}
+
+#subtitles {
+  position: absolute;
+  bottom: 100px;
+  width: 100%;
+  text-align: center;
+  padding: 0 20px;
+  text-shadow: 0 2px 8px black, 0 0 20px black;
+  pointer-events: none;
+}
+
+#speaker {
+  color: #76eaff;
+  font-size: 12px;
+  letter-spacing: 2px;
+  margin-bottom: 10px;
+}
+
+#dialogue {
+  font-size: clamp(18px, 4.5vw, 28px);
+  line-height: 1.5;
+  font-weight: 500;
+}
+
+#panel {
+  position: absolute;
+  bottom: 15px;
+  left: 0;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 8px;
+}
+
+button {
+  color: #d9faff;
+  background: #071725e8;
+  border: 1px solid #237f9e;
+  border-radius: 25px;
+  padding: 11px 16px;
+  font-size: 13px;
+  font-weight: bold;
+}
+
+button:active {
+  transform: scale(.96);
+}
+
+#progress {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 3px;
+  width: 0%;
+  background: #62e7ff;
+  box-shadow: 0 0 15px #62e7ff;
+  z-index: 10;
+}
+
+#status {
+  position: absolute;
+  right: 12px;
+  top: 75px;
+  color: #a5eaff;
+  font-size: 10px;
+  letter-spacing: 1px;
+}
+
+@media(max-width:500px) {
+  button {
+    padding: 10px 12px;
+    font-size: 12px;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<div id="app">
+
+  <canvas id="canvas"></canvas>
+
+  <div id="progress"></div>
+
+  <div id="top">
+    <div id="logo">THE LAST MAGICIAN</div>
+    <div id="sceneName">SCENE 01 · THE FORGOTTEN CITY</div>
+  </div>
+
+  <div id="status">CINEMATIC MODE</div>
+
+  <div id="subtitles">
+    <div id="speaker">NARRATOR</div>
+    <div id="dialogue">एक ऐसी दुनिया में...</div>
+  </div>
+
+  <div id="panel">
+    <button onclick="playStory()">▶ PLAY</button>
+    <button onclick="pauseStory()">Ⅱ PAUSE</button>
+    <button onclick="restartStory()">↻ RESTART</button>
+    <button onclick="toggleVoice()">🎙 VOICE ON/OFF</button>
+  </div>
+
+</div>
+
+<script>
+"use strict";
+
+/* =====================================
+   THE LAST MAGICIAN
+   Cinematic 2D Story Engine
+===================================== */
+
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+let W = 0;
+let H = 0;
+let DPR = 1;
+
+let elapsed = 0;
+let lastFrame = 0;
+let running = false;
+let voiceEnabled = true;
+let currentScene = -1;
+let sceneStart = 0;
+
+let rain = [];
+let particles = [];
+let lightning = [];
+let stars = [];
+
+let shake = 0;
+let flash = 0;
+
+const TOTAL_DURATION = 90000;
+
+function resize() {
+  W = window.innerWidth;
+  H = window.innerHeight;
+
+  DPR = Math.min(window.devicePixelRatio || 1, 2);
+
+  canvas.width = W * DPR;
+  canvas.height = H * DPR;
+
+  canvas.style.width = W + "px";
+  canvas.style.height = H + "px";
+
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+
+  initializeParticles();
+}
+
+window.addEventListener("resize", resize);
+
+/* =====================================
+   STORY
+===================================== */
+
+const scenes = [
+  {
+    name: "THE FORGOTTEN CITY",
+    start: 0,
+    duration: 15000,
+    speaker: "NARRATOR",
+    text: "एक ऐसी दुनिया में... जहाँ जादू को हमेशा के लिए मिटा दिया गया था... एक आखिरी जादूगर अभी भी जीवित था।",
+    mode: 0
+  },
+
+  {
+    name: "THE AWAKENING",
+    start: 15000,
+    duration: 15000,
+    speaker: "KAEL",
+    text: "नहीं... ये शक्ति वापस नहीं आ सकती। मैंने इसे हमेशा के लिए बंद कर दिया था!",
+    mode: 1
+  },
+
+  {
+    name: "THE DARK CREATURE",
+    start: 30000,
+    duration: 15000,
+    speaker: "SHADOW KING",
+    text: "KAEL... आखिरकार मैंने तुम्हें ढूँढ ही लिया!",
+    mode: 2
+  },
+
+  {
+    name: "THE MAGIC SWORD",
+    start: 45000,
+    duration: 15000,
+    speaker: "KAEL",
+    text: "अगर तुम इस दुनिया को खत्म करना चाहते हो... तो पहले तुम्हें मुझसे लड़ना होगा!",
+    mode: 3
+  },
+
+  {
+    name: "THE BATTLE BEGINS",
+    start: 60000,
+    duration: 15000,
+    speaker: "NARRATOR",
+    text: "दो शक्तियाँ टकराईं... और पूरा शहर एक विशाल विस्फोट से काँप उठा!",
+    mode: 4
+  },
+
+  {
+    name: "THE CLIFFHANGER",
+    start: 75000,
+    duration: 15000,
+    speaker: "SHADOW KING",
+    text: "तुम अभी तक नहीं जानते... कि तुम्हारे अंदर असली शक्ति किसकी है।",
+    mode: 5
+  }
+];
+
+/* =====================================
+   VOICE ENGINE
+===================================== */
+
+function speak(text, speaker) {
+
+  if (!voiceEnabled) return;
+
+  if (!("speechSynthesis" in window)) return;
+
+  speechSynthesis.cancel();
+
+  let utterance = new SpeechSynthesisUtterance(text);
+
+  utterance.lang = "hi-IN";
+
+  utterance.rate = speaker === "SHADOW KING" ? 0.78 : 0.9;
+  utterance.pitch = speaker === "SHADOW KING" ? 0.55 : 0.9;
+  utterance.volume = 1;
+
+  let voices = speechSynthesis.getVoices();
+
+  let hindiVoice = voices.find(v =>
+    v.lang.toLowerCase().includes("hi")
+  );
+
+  if (hindiVoice) {
+    utterance.voice = hindiVoice;
+  }
+
+  speechSynthesis.speak(utterance);
+}
+
+function toggleVoice() {
+
+  voiceEnabled = !voiceEnabled;
+
+  if (!voiceEnabled) {
+    speechSynthesis.cancel();
+  }
+
+  document.getElementById("status").textContent =
+    voiceEnabled ? "VOICE ENABLED" : "VOICE DISABLED";
+}
+
+/* =====================================
+   STORY CONTROLS
+===================================== */
+
+function playStory() {
+
+  if (running) return;
+
+  running = true;
+
+  lastFrame = performance.now();
+
+  if (currentScene === -1) {
+    elapsed = 0;
+    changeScene(0);
+  }
+
+  requestAnimationFrame(loop);
+}
+
+function pauseStory() {
+
+  running = false;
+
+  if ("speechSynthesis" in window) {
+    speechSynthesis.cancel();
+  }
+}
+
+function restartStory() {
+
+  pauseStory();
+
+  elapsed = 0;
+  currentScene = -1;
+
+  particles = [];
+
+  changeScene(0);
+
+  playStory();
+}
+
+function changeScene(index) {
+
+  currentScene = index;
+
+  sceneStart = elapsed;
+
+  const s = scenes[index];
+
+  document.getElementById("sceneName").textContent =
+    "SCENE " + String(index + 1).padStart(2, "0") +
+    " · " + s.name;
+
+  document.getElementById("speaker").textContent =
+    s.speaker;
+
+  document.getElementById("dialogue").textContent =
+    s.text;
+
+  speak(s.text, s.speaker);
+
+  if (s.mode === 1) {
+    createMagicBurst(W * 0.5, H * 0.55, 90);
+    flash = 0.3;
+  }
+
+  if (s.mode === 2) {
+    createMagicBurst(W * 0.5, H * 0.4, 120);
+    shake = 15;
+  }
+
+  if (s.mode === 3) {
+    createMagicBurst(W * 0.5, H * 0.55, 150);
+    flash = 0.7;
+  }
+
+  if (s.mode === 4) {
+    createMagicBurst(W * 0.5, H * 0.5, 220);
+    shake = 25;
+    flash = 1;
+  }
+
+  if (s.mode === 5) {
+    createMagicBurst(W * 0.5, H * 0.5, 180);
+  }
+}
+
+/* =====================================
+   PARTICLES
+===================================== */
+
+function initializeParticles() {
+
+  rain = [];
+  stars = [];
+
+  for (let i = 0; i < 260; i++) {
+
+    rain.push({
+      x: Math.random() * W,
+      y: Math.random() * H,
+      speed: 5 + Math.random() * 11,
+      length: 8 + Math.random() * 22
+    });
+  }
+
+  for (let i = 0; i < 120; i++) {
+
+    stars.push({
+      x: Math.random() * W,
+      y: Math.random() * H,
+      size: Math.random() * 2,
+      alpha: Math.random()
+    });
+  }
+}
+
+function createMagicBurst(x, y, amount) {
+
+  for (let i = 0; i < amount; i++) {
+
+    let angle = Math.random() * Math.PI * 2;
+    let speed = 1 + Math.random() * 7;
+
+    particles.push({
+      x: x,
+      y: y,
+
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+
+      life: 1,
+      size: 1 + Math.random() * 4,
+
+      color: Math.random() > 0.3 ?
+        "#56dfff" : "#b9a4ff"
+    });
+  }
+}
+
+function updateParticles() {
+
+  for (let i = particles.length - 1; i >= 0; i--) {
+
+    let p = particles[i];
+
+    p.x += p.vx;
+    p.y += p.vy;
+
+    p.vx *= 0.98;
+    p.vy *= 0.98;
+
+    p.life -= 0.012;
+
+    if (p.life <= 0) {
+      particles.splice(i, 1);
+    }
+  }
+}
+
+function drawParticles() {
+
+  particles.forEach(p => {
+
+    ctx.globalAlpha = p.life;
+
+    ctx.fillStyle = p.color;
+
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = p.color;
+
+    ctx.beginPath();
+
+    ctx.arc(
+      p.x,
+      p.y,
+      p.size,
+      0,
+      Math.PI * 2
+    );
+
+    ctx.fill();
+  });
+
+  ctx.globalAlpha = 1;
+  ctx.shadowBlur = 0;
+}
+
+/* =====================================
+   LIGHTNING
+===================================== */
+
+function drawLightning(x1, y1, x2, y2, depth) {
+
+  if (depth <= 0) return;
+
+  let mx = (x1 + x2) / 2;
+  let my = (y1 + y2) / 2;
+
+  mx += (Math.random() - 0.5) * 50;
+  my += (Math.random() - 0.5) * 30;
+
+  if (depth > 1) {
+
+    drawLightning(
+      x1, y1,
+      mx, my,
+      depth - 1
+    );
+
+    drawLightning(
+      mx, my,
+      x2, y2,
+      depth - 1
+    );
+
+  } else {
+
+    ctx.beginPath();
+
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(mx, my);
+    ctx.lineTo(x2, y2);
+
+    ctx.strokeStyle = "#d7faff";
+    ctx.lineWidth = 2;
+
+    ctx.shadowBlur = 25;
+    ctx.shadowColor = "#35cfff";
+
+    ctx.stroke();
+
+    ctx.shadowBlur = 0;
+  }
+}
+
+function lightningStrike() {
+
+  if (Math.random() < 0.018) {
+
+    flash = 0.7 + Math.random() * 0.3;
+
+    drawLightning(
+      W * Math.random(),
+      0,
+      W * Math.random(),
+      H * 0.7,
+      5
+    );
+  }
+}
+
+/* =====================================
+   BACKGROUND
+===================================== */
+
+function drawSky() {
+
+  let sky = ctx.createLinearGradient(0, 0, 0, H);
+
+  sky.addColorStop(0, "#02040b");
+  sky.addColorStop(0.4, "#111d35");
+  sky.addColorStop(1, "#050913");
+
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, W, H);
+
+  stars.forEach(s => {
+
+    ctx.globalAlpha =
+      0.2 + Math.abs(Math.sin(elapsed * 0.001 + s.alpha)) * 0.5;
+
+    ctx.fillStyle = "#c9eaff";
+
+    ctx.fillRect(
+      s.x,
+      s.y,
+      s.size,
+      s.size
+    );
+  });
+
+  ctx.globalAlpha = 1;
+}
+
+function drawBuildings() {
+
+  for (let i = 0; i < 14; i++) {
+
+    let bw = W / 14 + 2;
+
+    let height =
+      H * (0.25 + ((i * 13) % 50) / 100);
+
+    let x = i * bw;
+    let y = H * 0.55 - height;
+
+    let gradient = ctx.createLinearGradient(
+      x, y, x + bw, y
+    );
+
+    gradient.addColorStop(0, "#090f1a");
+    gradient.addColorStop(0.5, "#1a2637");
+    gradient.addColorStop(1, "#070c16");
+
+    ctx.fillStyle = gradient;
+
+    ctx.fillRect(x, y, bw + 2, height);
+
+    // Building edges
+    ctx.strokeStyle = "#24384e";
+    ctx.lineWidth = 1;
+
+    ctx.strokeRect(x, y, bw, height);
+
+    // Windows
+    for (let row = 0; row < 8; row++) {
+
+      for (let col = 0; col < 2; col++) {
+
+        let glow =
+          Math.sin(i * 13 + row * 7 + elapsed * 0.0005);
+
+        ctx.fillStyle =
+          glow > 0.7 ? "#9ddfff" : "#18283a";
+
+        ctx.fillRect(
+          x + 5 + col * 15,
+          y + 10 + row * 20,
+          7,
+          11
+        );
+      }
+    }
+  }
+}
+
+function drawRoad() {
+
+  let road = ctx.createLinearGradient(
+    0, H * 0.5,
+    0, H
+  );
+
+  road.addColorStop(0, "#172130");
+  road.addColorStop(1, "#04070c");
+
+  ctx.fillStyle = road;
+
+  ctx.beginPath();
+
+  ctx.moveTo(W * 0.35, H * 0.52);
+  ctx.lineTo(W * 0.65, H * 0.52);
+  ctx.lineTo(W * 1.2, H);
+  ctx.lineTo(-W * 0.2, H);
+
+  ctx.closePath();
+  ctx.fill();
+
+  // Road reflections
+  for (let i = 0; i < 12; i++) {
+
+    let x = W * (0.4 + Math.random() * 0.2);
+    let y = H * (0.55 + Math.random() * 0.4);
+
+    ctx.globalAlpha = 0.025;
+
+    ctx.fillStyle =
+      i % 2 === 0 ? "#4bdfff" : "#9c6cff";
+
+    ctx.fillRect(
+      x,
+      y,
+      W * 0.12,
+      3 + Math.random() * 15
+    );
+  }
+
+  ctx.globalAlpha = 1;
+}
+
+function drawRain() {
+
+  ctx.strokeStyle = "#a8dfff";
+  ctx.lineWidth = 1;
+
+  ctx.globalAlpha = 0.35;
+
+  rain.forEach(r => {
+
+    ctx.beginPath();
+
+    ctx.moveTo(r.x, r.y);
+
+    ctx.lineTo(
+      r.x - 4,
+      r.y + r.length
+    );
+
+    ctx.stroke();
+
+    r.y += r.speed;
+    r.x -= 2;
+
+    if (r.y > H) {
+
+      r.y = -30;
+      r.x = Math.random() * W;
+    }
+  });
+
+  ctx.globalAlpha = 1;
+}
+
+/* =====================================
+   KAEL CHARACTER
+===================================== */
+
+function drawKael(x, y, size, walking) {
+
+  ctx.save();
+
+  ctx.translate(x, y);
+
+  ctx.scale(size, size);
+
+  let swing = Math.sin(walking) * 0.12;
+
+  // Ground shadow
+  ctx.fillStyle = "#0009";
+
+  ctx.beginPath();
+
+  ctx.ellipse(
+    0, 0,
+    35, 10,
+    0, 0, Math.PI * 2
+  );
+
+  ctx.fill();
+
+  // Legs
+  ctx.strokeStyle = "#080d16";
+  ctx.lineWidth = 16;
+  ctx.lineCap = "round";
+
+  ctx.beginPath();
+
+  ctx.moveTo(-10, -48);
+  ctx.lineTo(-15 + swing * 30, -8);
+
+  ctx.stroke();
+
+  ctx.beginPath();
+
+  ctx.moveTo(10, -48);
+  ctx.lineTo(15 - swing * 30, -8);
+
+  ctx.stroke();
+
+  // Boots
+  ctx.fillStyle = "#151b26";
+
+  ctx.beginPath();
+
+  ctx.roundRect(
+    -27 + swing * 30,
+    -12,
+    25,
+    12,
+    5
+  );
+
+  ctx.fill();
+
+  ctx.beginPath();
+
+  ctx.roundRect(
+    5 - swing * 30,
+    -12,
+    25,
+    12,
+    5
+  );
+
+  ctx.fill();
+
+  // Coat
+  let coat = ctx.createLinearGradient(
+    -25, -100,
+    30, -100
+  );
+
+  coat.addColorStop(0, "#090d16");
+  coat.addColorStop(0.3, "#283448");
+  coat.addColorStop(0.55, "#121c2b");
+  coat.addColorStop(1, "#060a12");
+
+  ctx.fillStyle = coat;
+
+  ctx.beginPath();
+
+  ctx.moveTo(-22, -110);
+  ctx.lineTo(22, -110);
+
+  ctx.lineTo(32, -48);
+
+  ctx.lineTo(22, -8);
+
+  ctx.lineTo(5, -20);
+
+  ctx.lineTo(0, -65);
+
+  ctx.lineTo(-5, -20);
+
+  ctx.lineTo(-25, -8);
+
+  ctx.lineTo(-32, -48);
+
+  ctx.closePath();
+
+  ctx.fill();
+
+  // Coat highlights
+  ctx.strokeStyle = "#52647d";
+  ctx.lineWidth = 1.5;
+
+  ctx.beginPath();
+
+  ctx.moveTo(-17, -105);
+  ctx.lineTo(-8, -55);
+  ctx.lineTo(-5, -20);
+
+  ctx.stroke();
+
+  ctx.beginPath();
+
+  ctx.moveTo(17, -105);
+  ctx.lineTo(8, -55);
+  ctx.lineTo(5, -20);
+
+  ctx.stroke();
+
+  // Belt
+  ctx.fillStyle = "#080b12";
+
+  ctx.fillRect(
+    -20, -60,
+    40, 6
+  );
+
+  // Arms
+  ctx.strokeStyle = "#141c29";
+  ctx.lineWidth = 13;
+
+  ctx.beginPath();
+
+  ctx.moveTo(-20, -100);
+  ctx.lineTo(-31, -65 + swing * 30);
+
+  ctx.stroke();
+
+  ctx.beginPath();
+
+  ctx.moveTo(20, -100);
+  ctx.lineTo(31, -65 - swing * 30);
+
+  ctx.stroke();
+
+  // Hands
+  ctx.fillStyle = "#c18f78";
+
+  ctx.beginPath();
+
+  ctx.ellipse(
+    -31, -62 + swing * 30,
+    7, 9,
+    0, 0, Math.PI * 2
+  );
+
+  ctx.fill();
+
+  ctx.beginPath();
+
+  ctx.ellipse(
+    31, -62 - swing * 30,
+    7, 9,
+    0, 0, Math.PI * 2
+  );
+
+  ctx.fill();
+
+  // Neck
+  ctx.fillStyle = "#c18f78";
+
+  ctx.fillRect(
+    -8, -123,
+    16, 20
+  );
+
+  // Face
+  let skin = ctx.createLinearGradient(
+    -20, -150,
+    20, -120
+  );
+
+  skin.addColorStop(0, "#8e6253");
+  skin.addColorStop(0.5, "#d6a58b");
+  skin.addColorStop(1, "#a87966");
+
+  ctx.fillStyle = skin;
+
+  ctx.beginPath();
+
+  ctx.moveTo(-20, -160);
+
+  ctx.quadraticCurveTo(
+    -22, -140,
+    -12, -125
+  );
+
+  ctx.quadraticCurveTo(
+    0, -112,
+    12, -125
+  );
+
+  ctx.quadraticCurveTo(
+    22, -140,
+    20, -160
+  );
+
+  ctx.closePath();
+
+  ctx.fill();
+
+  // Ears
+  ctx.fillStyle = "#a97964";
+
+  ctx.beginPath();
+
+  ctx.ellipse(
+    -20, -145,
+    5, 8,
+    0, 0, Math.PI * 2
+  );
+
+  ctx.fill();
+
+  ctx.beginPath();
+
+  ctx.ellipse(
+    20, -145,
+    5, 8,
+    0, 0, Math.PI * 2
+  );
+
+  ctx.fill();
+
+  // Hair
+  let hair = ctx.createLinearGradient(
+    -25, -180,
+    20, -140
+  );
+
+  hair.addColorStop(0, "#02040a");
+  hair.addColorStop(0.5, "#1c2638");
+  hair.addColorStop(1, "#070b13");
+
+  ctx.fillStyle = hair;
+
+  ctx.beginPath();
+
+  ctx.moveTo(-22, -150);
+
+  ctx.lineTo(-25, -172);
+
+  ctx.lineTo(-13, -165);
+
+  ctx.lineTo(-18, -185);
+
+  ctx.lineTo(-3, -174);
+
+  ctx.lineTo(5, -190);
+
+  ctx.lineTo(11, -172);
+
+  ctx.lineTo(23, -181);
+
+  ctx.lineTo(20, -155);
+
+  ctx.lineTo(15, -166);
+
+  ctx.lineTo(10, -150);
+
+  ctx.lineTo(0, -165);
+
+  ctx.lineTo(-8, -150);
+
+  ctx.lineTo(-17, -164);
+
+  ctx.closePath();
+
+  ctx.fill();
+
+  // Hair strands
+  ctx.strokeStyle = "#53647c";
+  ctx.lineWidth = 1.2;
+
+  ctx.beginPath();
+
+  ctx.moveTo(-15, -178);
+  ctx.lineTo(-5, -163);
+
+  ctx.moveTo(2, -184);
+  ctx.lineTo(4, -162);
+
+  ctx.moveTo(15, -177);
+  ctx.lineTo(10, -163);
+
+  ctx.stroke();
+
+  // Eyebrows
+  ctx.strokeStyle = "#12131a";
+  ctx.lineWidth = 2.5;
+
+  ctx.beginPath();
+
+  ctx.moveTo(-14, -150);
+  ctx.lineTo(-4, -153);
+
+  ctx.moveTo(4, -153);
+  ctx.lineTo(14, -150);
+
+  ctx.stroke();
+
+  // Eyes
+  ctx.fillStyle = "#eafaff";
+
+  ctx.beginPath();
+
+  ctx.ellipse(
+    -9, -145,
+    5, 3.5,
+    0, 0, Math.PI * 2
+  );
+
+  ctx.fill();
+
+  ctx.beginPath();
+
+  ctx.ellipse(
+    9, -145,
+    5, 3.5,
+    0, 0, Math.PI * 2
+  );
+
+  ctx.fill();
+
+  // Magical pupils
+  ctx.fillStyle =
+    scenes[currentScene]?.mode >= 1 ?
+    "#36dfff" : "#222d40";
+
+  ctx.beginPath();
+
+  ctx.arc(
+    -9, -145,
+    2.5,
+    0, Math.PI * 2
+  );
+
+  ctx.fill();
+
+  ctx.beginPath();
+
+  ctx.arc(
+    9, -145,
+    2.5,
+    0, Math.PI * 2
+  );
+
+  ctx.fill();
+
+  // Eye glow
+  if (scenes[currentScene]?.mode >= 1) {
+
+    ctx.shadowBlur = 12;
+    ctx.shadowColor = "#32dfff";
+
+    ctx.fillStyle = "#8cf5ff";
+
+    ctx.fillRect(
+      -10, -146,
+      2, 2
+    );
+
+    ctx.fillRect(
+      8, -146,
+      2, 2
+    );
+
+    ctx.shadowBlur = 0;
+  }
+
+  // Nose
+  ctx.strokeStyle = "#875e51";
+  ctx.lineWidth = 1.5;
+
+  ctx.beginPath();
+
+  ctx.moveTo(0, -143);
+  ctx.lineTo(-2, -136);
+  ctx.lineTo(2, -135);
+
+  ctx.stroke();
+
+  // Mouth
+  ctx.strokeStyle = "#754b45";
+  ctx.lineWidth = 1.5;
+
+  ctx.beginPath();
+
+  ctx.moveTo(-5, -130);
+  ctx.quadraticCurveTo(
+    0, -128,
+    5, -130
+  );
+
+  ctx.stroke();
+
+  // Face shadow
+  ctx.fillStyle = "#17203033";
+
+  ctx.beginPath();
+
+  ctx.moveTo(-20, -143);
+  ctx.lineTo(-5, -125);
+  ctx.lineTo(-18, -132);
+
+  ctx.closePath();
+
+  ctx.fill();
+
+  ctx.restore();
+}
+
+/* =====================================
+   SHADOW KING
+===================================== */
+
+function drawShadowKing(x, y, size) {
+
+  ctx.save();
+
+  ctx.translate(x, y);
+
+  ctx.scale(size, size);
+
+  // Smoke body
+  let shadow = ctx.createRadialGradient(
+    0, -100,
+    5,
+    0, -100,
+    100
+  );
+
+  shadow.addColorStop(0, "#262044");
+  shadow.addColorStop(0.5, "#100c1e");
+  shadow.addColorStop(1, "#020208");
+
+  ctx.fillStyle = shadow;
+
+  ctx.beginPath();
+
+  ctx.moveTo(-50, 0);
+
+  ctx.lineTo(-60, -120);
+
+  ctx.lineTo(-30, -190);
+
+  ctx.lineTo(0, -210);
+
+  ctx.lineTo(30, -190);
+
+  ctx.lineTo(60, -120);
+
+  ctx.lineTo(50, 0);
+
+  ctx.closePath();
+
+  ctx.fill();
+
+  // Horns
+  ctx.strokeStyle = "#100a1a";
+  ctx.lineWidth = 15;
+
+  ctx.beginPath();
+
+  ctx.moveTo(-25, -185);
+  ctx.lineTo(-60, -240);
+
+  ctx.stroke();
+
+  ctx.beginPath();
+
+  ctx.moveTo(25, -185);
+  ctx.lineTo(60, -240);
+
+  ctx.stroke();
+
+  // Red eyes
+  ctx.fillStyle = "#ff243d";
+
+  ctx.shadowBlur = 30;
+  ctx.shadowColor = "#ff0022";
+
+  ctx.fillRect(
+    -25, -165,
+    17, 5
+  );
+
+  ctx.fillRect(
+    8, -165,
+    17, 5
+  );
+
+  ctx.shadowBlur = 0;
+
+  // Dark energy
+  for (let i = 0; i < 5; i++) {
+
+    ctx.strokeStyle = "#6e36ff66";
+    ctx.lineWidth = 2;
+
+    ctx.beginPath();
+
+    ctx.arc(
+      0, -100,
+      60 + i * 15,
+      elapsed * 0.001 + i,
+      elapsed * 0.001 + i + Math.PI
+    );
+
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+/* =====================================
+   MAGIC SWORD
+===================================== */
+
+function drawSword(x, y, angle) {
+
+  ctx.save();
+
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+
+  ctx.shadowBlur = 25;
+  ctx.shadowColor = "#4deaff";
+
+  // Blade
+  let blade = ctx.createLinearGradient(
+    -10, 0,
+    10, 0
+  );
+
+  blade.addColorStop(0, "#5f8cff");
+  blade.addColorStop(0.5, "#f2ffff");
+  blade.addColorStop(1, "#2bbfff");
+
+  ctx.fillStyle = blade;
+
+  ctx.beginPath();
+
+  ctx.moveTo(-8, 0);
+  ctx.lineTo(8, 0);
+  ctx.lineTo(0, -110);
+
+  ctx.closePath();
+
+  ctx.fill();
+
+  // Guard
+  ctx.fillStyle = "#b9eaff";
+
+  ctx.fillRect(
+    -25, -5,
+    50, 7
+  );
+
+  // Handle
+  ctx.fillStyle = "#1a2235";
+
+  ctx.fillRect(
+    -5, 0,
+    10, 30
+  );
+
+  ctx.shadowBlur = 0;
+
+  ctx.restore();
+}
+
+/* =====================================
+   PORTAL
+===================================== */
+
+function drawPortal(x, y, radius) {
+
+  ctx.save();
+
+  ctx.translate(x, y);
+
+  for (let i = 0; i < 6; i++) {
+
+    ctx.strokeStyle =
+      i % 2 === 0 ? "#8e5cff" : "#32dfff";
+
+    ctx.lineWidth = 3;
+
+    ctx.shadowBlur = 20;
+
+    ctx.shadowColor = ctx.strokeStyle;
+
+    ctx.beginPath();
+
+    ctx.ellipse(
+      0, 0,
+      radius + i * 8,
+      radius * 1.5 + i * 10,
+      elapsed * 0.0005 * (i % 2 ? 1 : -1),
+      0,
+      Math.PI * 2
+    );
+
+    ctx.stroke();
+  }
+
+  ctx.shadowBlur = 0;
+
+  ctx.restore();
+}
+
+/* =====================================
+   CINEMATIC SCENES
+===================================== */
+
+function drawScene() {
+
+  const mode = scenes[currentScene]?.mode || 0;
+
+  drawSky();
+  drawBuildings();
+  drawRoad();
+
+  if (mode === 0) {
+
+    drawKael(
+      W * 0.5,
+      H * 0.82,
+      Math.min(W, H) / 430,
+      elapsed * 0.005
+    );
+  }
+
+  if (mode === 1) {
+
+    drawPortal(
+      W * 0.5,
+      H * 0.42,
+      H * 0.08
+    );
+
+    drawKael(
+      W * 0.5,
+      H * 0.84,
+      Math.min(W, H) / 320,
+      elapsed * 0.005
+    );
+  }
+
+  if (mode === 2) {
+
+    drawPortal(
+      W * 0.5,
+      H * 0.4,
+      H * 0.13
+    );
+
+    drawShadowKing(
+      W * 0.72,
+      H * 0.85,
+      Math.min(W, H) / 480
+    );
+
+    drawKael(
+      W * 0.28,
+      H * 0.84,
+      Math.min(W, H) / 430,
+      elapsed * 0.005
+    );
+  }
+
+  if (mode === 3) {
+
+    drawPortal(
+      W * 0.5,
+      H * 0.4,
+      H * 0.12
+    );
+
+    drawKael(
+      W * 0.5,
+      H * 0.84,
+      Math.min(W, H) / 320,
+      elapsed * 0.005
+    );
+
+    drawSword(
+      W * 0.68,
+      H * 0.65,
+      -0.3
+    );
+  }
+
+  if (mode === 4) {
+
+    drawShadowKing(
+      W * 0.72,
+      H * 0.84,
+      Math.min(W, H) / 430
+    );
+
+    drawKael(
+      W * 0.28,
+      H * 0.84,
+      Math.min(W, H) / 350,
+      elapsed * 0.008
+      );
+
+    drawSword(
+      W * 0.5,
+      H * 0.65,
+      -0.8
+    );
+
+    drawLightning(
+      W * 0.2, 0,
+      W * 0.6, H * 0.8,
+      5
+    );
+  }
+
+  if (mode === 5) {
+
+    drawShadowKing(
+      W * 0.72,
+      H * 0.85,
+      Math.min(W, H) / 380
+    );
+
+    drawKael(
+      W * 0.28,
+      H * 0.84,
+      Math.min(W, H) / 430,
+      elapsed * 0.002
+    );
+
+    // Red energy awakening
+    ctx.fillStyle = "#ff003322";
+
+    ctx.fillRect(
+      0, 0,
+      W, H
+    );
+
+    ctx.shadowBlur = 40;
+    ctx.shadowColor = "#ff0022";
+
+    ctx.fillStyle = "#ff293f";
+
+    ctx.beginPath();
+
+    ctx.arc(
+      W * 0.28,
+      H * 0.84 - 145 * Math.min(W, H) / 430,
+      4,
+      0, Math.PI * 2
+    );
+
+    ctx.fill();
+
+    ctx.shadowBlur = 0;
+  }
+}
+
+/* =====================================
+   CAMERA
+===================================== */
+
+function drawCamera() {
+
+  let zoom = 1;
+
+  let mode = scenes[currentScene]?.mode || 0;
+
+  if (mode === 0) {
+    zoom = 1 + Math.sin(elapsed * 0.0005) * 0.025;
+  }
+
+  if (mode === 1) {
+    zoom = 1.08 + Math.sin(elapsed * 0.001) * 0.02;
+  }
+
+  if (mode === 2) {
+    zoom = 1.12;
+  }
+
+  if (mode === 3) {
+    zoom = 1.15;
+  }
+
+  if (mode === 4) {
+    zoom = 1.18;
+  }
+
+  if (mode === 5) {
+    zoom = 1.25;
+  }
+
+  let angle = 0;
+
+  if (mode === 1 || mode === 3) {
+    angle = Math.sin(elapsed * 0.0006) * 0.03;
+  }
+
+  ctx.save();
+
+  ctx.translate(W / 2, H / 2);
+
+  ctx.rotate(angle);
+
+  ctx.scale(zoom, zoom);
+
+  ctx.translate(-W / 2, -H / 2);
+
+  drawScene();
+
+  ctx.restore();
+}
+
+/* =====================================
+   FINAL CINEMATIC EFFECTS
+===================================== */
+
+function drawVignette() {
+
+  let gradient = ctx.createRadialGradient(
+    W / 2,
+    H / 2,
+    H * 0.2,
+
+    W / 2,
+    H / 2,
+    H * 0.8
+  );
+
+  gradient.addColorStop(0, "#00000000");
+  gradient.addColorStop(1, "#000000c9");
+
+  ctx.fillStyle = gradient;
+
+  ctx.fillRect(
+    0, 0,
+    W, H
+  );
+}
+
+function drawLetterbox() {
+
+  ctx.fillStyle = "#000";
+
+  ctx.fillRect(
+    0, 0,
+    W, H * 0.06
+  );
+
+  ctx.fillRect(
+    0, H * 0.94,
+    W, H * 0.06
+  );
+}
+
+/* =====================================
+   MAIN LOOP
+===================================== */
+
+function loop(now) {
+
+  if (!running) return;
+
+  let delta = now - lastFrame;
+
+  lastFrame = now;
+
+  elapsed += delta;
+
+  if (elapsed >= TOTAL_DURATION) {
+
+    elapsed = TOTAL_DURATION;
+
+    running = false;
+
+    speechSynthesis.cancel();
+
+    document.getElementById("dialogue").textContent =
+      "TO BE CONTINUED...";
+
+    document.getElementById("speaker").textContent =
+      "THE LAST MAGICIAN";
+
+    return;
+  }
+
+  let next = scenes.findIndex(s =>
+    elapsed >= s.start &&
+    elapsed < s.start + s.duration
+  );
+
+  if (next !== currentScene && next !== -1) {
+    changeScene(next);
+  }
+
+  ctx.clearRect(
+    0, 0,
+    W, H
+  );
+
+  ctx.save();
+
+  if (shake > 0) {
+
+    ctx.translate(
+      (Math.random() - 0.5) * shake,
+      (Math.random() - 0.5) * shake
+    );
+
+    shake *= 0.92;
+  }
+
+  drawCamera();
+
+  drawRain();
+
+  updateParticles();
+
+  drawParticles();
+
+  lightningStrike();
+
+  drawVignette();
+
+  drawLetterbox();
+
+  ctx.restore();
+
+  if (flash > 0) {
+
+    ctx.fillStyle =
+      "rgba(180,230,255," + flash + ")";
+
+    ctx.fillRect(
+      0, 0,
+      W, H
+    );
+
+    flash *= 0.85;
+  }
+
+  document.getElementById("progress").style.width =
+    (elapsed / TOTAL_DURATION * 100) + "%";
+
+  requestAnimationFrame(loop);
+}
+
+/* =====================================
+   START
+===================================== */
+
+resize();
+
+document.getElementById("dialogue").textContent =
+  "एक ऐसी दुनिया में...";
+
+document.getElementById("speaker").textContent =
+  "NARRATOR";
+
+</script>
+
+</body>
+</html>
