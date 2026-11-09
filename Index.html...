@@ -1,0 +1,647 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>IRON MAN MARK 45 - OPEN WORLD</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{overflow:hidden;background:#75b9e9;font-family:Arial;color:white;touch-action:none}
+canvas{display:block}
+#hud{position:fixed;inset:0;pointer-events:none}
+#top{
+ position:absolute;top:12px;left:12px;
+ background:#071526cc;padding:10px 15px;
+ border:1px solid #e5b64c;border-radius:10px;
+ font-size:13px;line-height:1.7
+}
+#title{font-weight:bold;color:#ffc94a;font-size:17px}
+#crosshair{
+ position:absolute;left:50%;top:50%;
+ transform:translate(-50%,-50%);
+ font-size:25px;color:#ffffffaa
+}
+#controls{position:fixed;inset:0;pointer-events:none}
+#joystick{
+ position:absolute;bottom:28px;left:25px;
+ width:125px;height:125px;border-radius:50%;
+ background:#ffffff22;border:2px solid #ffffff77;
+ pointer-events:auto;touch-action:none
+}
+#stick{
+ position:absolute;left:35px;top:35px;
+ width:50px;height:50px;border-radius:50%;
+ background:#d7eaffaa;border:2px solid white;
+}
+.btn{
+ position:absolute;pointer-events:auto;
+ width:65px;height:65px;border-radius:50%;
+ background:#102c4dcc;border:2px solid #ffca55;
+ color:white;font-weight:bold;font-size:11px;
+ display:flex;align-items:center;justify-content:center;
+ touch-action:none;
+}
+#fly{right:25px;bottom:115px}
+#blast{right:100px;bottom:30px}
+#suit{right:25px;bottom:30px}
+#up{right:25px;bottom:190px;width:48px;height:48px}
+#down{right:25px;bottom:245px;width:48px;height:48px}
+#help{
+ position:absolute;bottom:10px;left:50%;
+ transform:translateX(-50%);
+ background:#071526bb;padding:7px 12px;
+ border-radius:8px;font-size:10px;white-space:nowrap
+}
+#message{
+ position:absolute;top:85px;left:50%;
+ transform:translateX(-50%);
+ color:#ffe18a;font-weight:bold;text-shadow:0 2px 5px black
+}
+@media(min-width:800px){
+ #help{font-size:13px}
+}
+</style>
+</head>
+<body>
+<div id="hud">
+ <div id="top">
+  <div id="title">IRON MAN MARK 45</div>
+  <div id="suitStatus">SUIT: NOT EQUIPPED</div>
+  <div id="flightStatus">FLIGHT: OFF</div>
+  <div id="altitude">ALTITUDE: 0 M</div>
+  <div id="position">WORLD: 500, 500</div>
+  <div>WORLD SIZE: 1000 × 1000 M</div>
+ </div>
+ <div id="crosshair">+</div>
+ <div id="message"></div>
+</div>
+<div id="controls">
+ <div id="joystick"><div id="stick"></div></div>
+ <div class="btn" id="fly">FLY</div>
+ <div class="btn" id="blast">BLAST</div>
+ <div class="btn" id="suit">SUIT</div>
+ <div class="btn" id="up">UP</div>
+ <div class="btn" id="down">DOWN</div>
+ <div id="help">WASD: MOVE | SPACE: JUMP | MOUSE: CAMERA | F: FLY | E: SUIT | CLICK: BLAST</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(() => {
+"use strict";
+
+if(!window.THREE){
+ document.getElementById("message").textContent="Internet connection required to load 3D engine.";
+ return;
+}
+
+// SCENE
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x87c8f5);
+scene.fog=new THREE.Fog(0x87c8f5,150,850);
+
+const camera=new THREE.PerspectiveCamera(
+ 70,innerWidth/innerHeight,0.1,1500
+);
+
+const renderer=new THREE.WebGLRenderer({
+ antialias:false,powerPreference:"high-performance"
+});
+renderer.setSize(innerWidth,innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));
+renderer.shadowMap.enabled=false;
+document.body.appendChild(renderer.domElement);
+
+// LIGHTS
+scene.add(new THREE.HemisphereLight(0xcceaff,0x536b39,2));
+
+const sun=new THREE.DirectionalLight(0xffffff,2);
+sun.position.set(-200,300,150);
+scene.add(sun);
+
+// MATERIALS
+const mat=(color,metal=0)=>{
+ return new THREE.MeshStandardMaterial({
+ color,roughness:0.55,metalness:metal
+ });
+};
+
+const gold=mat(0xf4a51c,0.65);
+const red=mat(0x991b24,0.55);
+const dark=mat(0x171e2a,0.5);
+const glow=new THREE.MeshBasicMaterial({color:0x72eaff});
+const white=mat(0xe8edf4);
+const green=mat(0x378449);
+
+// WORLD: 1000 x 1000 METERS
+const ground=new THREE.Mesh(
+ new THREE.PlaneGeometry(1000,1000),
+ mat(0x568a48)
+);
+ground.rotation.x=-Math.PI/2;
+ground.position.y=-0.5;
+scene.add(ground);
+
+// ROAD
+function road(x,z,w,d){
+ const m=new THREE.Mesh(
+  new THREE.BoxGeometry(w,0.08,d),
+  mat(0x343a43)
+ );
+ m.position.set(x,-0.42,z);
+ scene.add(m);
+}
+road(0,0,1000,32);
+road(0,0,32,1000);
+road(0,200,1000,14);
+road(200,0,14,1000);
+road(-250,0,14,1000);
+
+// ROAD MARKINGS
+const lineMat=new THREE.MeshBasicMaterial({color:0xe9e4a4});
+for(let i=-480;i<=480;i+=35){
+ const l=new THREE.Mesh(new THREE.BoxGeometry(13,.1,0.6),lineMat);
+ l.position.set(i,-.35,0);
+ scene.add(l);
+}
+
+// BUILDINGS
+const buildings=[];
+function building(x,z,w,h,d){
+ const group=new THREE.Group();
+ const body=new THREE.Mesh(
+  new THREE.BoxGeometry(w,h,d),
+  mat([0xaaaeb8,0xc4a78a,0x858e9b,0xc2c6ce,0x9eabb2][Math.floor(Math.random()*5)])
+ );
+ body.position.y=h/2;
+ group.add(body);
+
+ const roof=new THREE.Mesh(
+  new THREE.BoxGeometry(w+1,.8,d+1),
+  dark
+ );
+ roof.position.y=h+.4;
+ group.add(roof);
+
+ const windowMat=new THREE.MeshBasicMaterial({color:0x85d8ed});
+ for(let y=3;y<h-1;y+=4){
+  for(let a=-w/2+2;a<w/2-1;a+=4){
+   const win=new THREE.Mesh(
+    new THREE.BoxGeometry(1.5,1.8,.15),
+    windowMat
+   );
+   win.position.set(a,y,d/2+.08);
+   group.add(win);
+  }
+ }
+ group.position.set(x,0,z);
+ scene.add(group);
+ buildings.push({x,z,w,d,h,group});
+}
+
+// City layout
+for(let x=-430;x<=430;x+=75){
+ for(let z=-430;z<=430;z+=75){
+  if(Math.abs(x)<65||Math.abs(z)<65)continue;
+  if(Math.random()>.25){
+   building(
+    x+(Math.random()-.5)*12,
+    z+(Math.random()-.5)*12,
+    20+Math.random()*18,
+    12+Math.random()*40,
+    20+Math.random()*18
+   );
+  }
+ }
+}
+
+// TREES
+function tree(x,z){
+ const g=new THREE.Group();
+ const trunk=new THREE.Mesh(
+  new THREE.CylinderGeometry(.6,.9,5,6),
+  mat(0x75502e)
+ );
+ trunk.position.y=2.5;
+ g.add(trunk);
+
+ const crown=new THREE.Mesh(
+  new THREE.IcosahedronGeometry(4,1),
+  green
+ );
+ crown.position.y=7;
+ g.add(crown);
+ g.position.set(x,0,z);
+ scene.add(g);
+}
+
+for(let i=0;i<180;i++){
+ const x=(Math.random()-.5)*950;
+ const z=(Math.random()-.5)*950;
+ if(Math.abs(x)<80||Math.abs(z)<80)continue;
+ tree(x,z);
+}
+
+// HILLS
+for(let i=0;i<18;i++){
+ const h=15+Math.random()*40;
+ const hill=new THREE.Mesh(
+  new THREE.ConeGeometry(25+Math.random()*35,h,6),
+  mat(0x718d57)
+ );
+ hill.position.set(
+  (Math.random()-.5)*950,
+  h/2-1,
+  (Math.random()-.5)*950
+ );
+ scene.add(hill);
+}
+
+// PLAYER AND IRON MAN MODEL
+const player=new THREE.Group();
+scene.add(player);
+
+const suit=new THREE.Group();
+player.add(suit);
+
+function part(parent,w,h,d,material,x,y,z){
+ const mesh=new THREE.Mesh(
+  new THREE.BoxGeometry(w,h,d),material
+ );
+ mesh.position.set(x,y,z);
+ parent.add(mesh);
+ return mesh;
+}
+
+// Torso
+part(suit,1.3,1.6,.7,red,0,2.3,0);
+part(suit,.8,1.1,.76,gold,0,2.4,.02);
+
+// Chest reactor
+const reactor=new THREE.Mesh(
+ new THREE.CylinderGeometry(.22,.22,.12,12),
+ glow
+);
+reactor.rotation.x=Math.PI/2;
+reactor.position.set(0,2.65,.4);
+suit.add(reactor);
+
+// Head
+part(suit,.85,.85,.85,gold,0,3.65,0);
+part(suit,.7,.23,.08,dark,0,3.68,.45);
+
+// Eyes
+part(suit,.23,.07,.08,glow,-.2,3.7,.5);
+part(suit,.23,.07,.08,glow,.2,3.7,.5);
+
+// Arms
+const arms=[];
+for(const side of [-1,1]){
+ const arm=new THREE.Group();
+ arm.position.set(side*.85,2.65,0);
+ suit.add(arm);
+
+ part(arm,.42,.95,.48,red,0,-.48,0);
+ part(arm,.48,.4,.5,gold,0,-1.05,0);
+ part(arm,.25,.12,.3,glow,0,-1.25,.05);
+ arms.push(arm);
+}
+
+// Legs
+const legs=[];
+for(const side of [-1,1]){
+ const leg=new THREE.Group();
+ leg.position.set(side*.35,1.55,0);
+ suit.add(leg);
+ part(leg,.48,1.05,.55,red,0,-.48,0);
+ part(leg,.5,.3,.7,gold,0,-1.1,.08);
+ legs.push(leg);
+}
+
+// Backpack
+part(suit,1,.9,.35,gold,0,2.5,-.5);
+
+// Suit boot jets
+for(const side of [-1,1]){
+ const jet=new THREE.Mesh(
+  new THREE.CylinderGeometry(.17,.3,.5,8),
+  glow
+ );
+ jet.position.set(side*.35,.1,0);
+ suit.add(jet);
+}
+suit.visible=false;
+
+// PLAYER STATE
+let equipped=false;
+let flying=false;
+let velocityY=0;
+let yaw=0;
+let pitch=0;
+let walkTime=0;
+
+player.position.set(0,0,0);
+
+// CAMERA
+let cameraDistance=8;
+let cameraHeight=4;
+let cameraYaw=0;
+let dragging=false;
+let lastX=0,lastY=0;
+
+// KEYBOARD
+const keys={};
+addEventListener("keydown",e=>{
+ keys[e.key.toLowerCase()]=true;
+ if(e.key===" ")e.preventDefault();
+ if(e.key.toLowerCase()==="e")toggleSuit();
+ if(e.key.toLowerCase()==="f")toggleFly();
+ if(e.key.toLowerCase()===" ")jump();
+ if(e.key.toLowerCase()==="q")fire();
+});
+addEventListener("keyup",e=>keys[e.key.toLowerCase()]=false);
+
+// MOUSE CAMERA
+renderer.domElement.addEventListener("pointerdown",e=>{
+ if(e.pointerType==="mouse"){
+  dragging=true;lastX=e.clientX;lastY=e.clientY;
+ }
+});
+addEventListener("pointerup",()=>dragging=false);
+addEventListener("pointermove",e=>{
+ if(!dragging)return;
+ cameraYaw-=(e.clientX-lastX)*.006;
+ pitch=Math.max(-.8,Math.min(.8,pitch+(e.clientY-lastY)*.004));
+ lastX=e.clientX;lastY=e.clientY;
+});
+
+// JOYSTICK
+let joyX=0,joyY=0;
+const joystick=document.getElementById("joystick");
+const stick=document.getElementById("stick");
+let joyActive=false;
+
+function updateJoy(e){
+ const r=joystick.getBoundingClientRect();
+ let x=e.clientX-(r.left+r.width/2);
+ let y=e.clientY-(r.top+r.height/2);
+ const len=Math.hypot(x,y);
+ if(len>43){x=x/len*43;y=y/len*43;}
+ joyX=x/43;
+ joyY=y/43;
+ stick.style.transform=`translate(${x}px,${y}px)`;
+}
+joystick.addEventListener("pointerdown",e=>{
+ joyActive=true;
+ joystick.setPointerCapture(e.pointerId);
+ updateJoy(e);
+});
+joystick.addEventListener("pointermove",e=>{
+ if(joyActive)updateJoy(e);
+});
+function stopJoy(){
+ joyActive=false;joyX=joyY=0;
+ stick.style.transform="translate(0px,0px)";
+}
+joystick.addEventListener("pointerup",stopJoy);
+joystick.addEventListener("pointercancel",stopJoy);
+
+// BUTTONS
+function bindButton(id,fn){
+ const el=document.getElementById(id);
+ el.addEventListener("pointerdown",e=>{
+  e.preventDefault();fn();
+ });
+}
+bindButton("suit",toggleSuit);
+bindButton("fly",toggleFly);
+bindButton("blast",fire);
+bindButton("up",()=>{if(flying)player.position.y+=2;});
+bindButton("down",()=>{if(flying)player.position.y=Math.max(2,player.position.y-2);});
+
+// SUIT ANIMATION
+let summonTimer=0;
+function toggleSuit(){
+ if(summonTimer>0)return;
+ summonTimer=1;
+ if(!equipped){
+  equipped=true;
+  suit.visible=true;
+  showMessage("MARK 45 SUIT EQUIPPED");
+ }else{
+  equipped=false;
+  flying=false;
+  suit.visible=false;
+  showMessage("SUIT STORED");
+ }
+ updateHUD();
+}
+
+function toggleFly(){
+ if(!equipped){
+  showMessage("EQUIP IRON MAN SUIT FIRST");
+  return;
+ }
+ flying=!flying;
+ if(flying)player.position.y=Math.max(player.position.y,3);
+ velocityY=0;
+ showMessage(flying?"FLIGHT ACTIVATED":"FLIGHT DEACTIVATED");
+ updateHUD();
+}
+
+function jump(){
+ if(!flying && player.position.y<.1){
+  velocityY=9;
+ }
+}
+
+let messageTimer=0;
+function showMessage(s){
+ document.getElementById("message").textContent=s;
+ messageTimer=2;
+}
+
+// ENERGY PROJECTILES
+const projectiles=[];
+function fire(){
+ if(!equipped){
+  showMessage("EQUIP SUIT FIRST");
+  return;
+ }
+ const forward=new THREE.Vector3(
+  -Math.sin(player.rotation.y),
+  0,
+  -Math.cos(player.rotation.y)
+ );
+ const p=new THREE.Mesh(
+  new THREE.SphereGeometry(.35,8,8),
+  new THREE.MeshBasicMaterial({color:0x6cecff})
+ );
+ p.position.copy(player.position);
+ p.position.y+=2.5;
+ p.position.add(forward.clone().multiplyScalar(2));
+ scene.add(p);
+ projectiles.push({
+  mesh:p,
+  velocity:forward.multiplyScalar(2.8),
+  life:160
+ });
+}
+
+// PROJECTILE UPDATE
+function updateProjectiles(){
+ for(let i=projectiles.length-1;i>=0;i--){
+  const p=projectiles[i];
+  p.mesh.position.add(p.velocity);
+  p.life--;
+  if(p.life<=0){
+   scene.remove(p.mesh);
+   projectiles.splice(i,1);
+  }
+ }
+}
+
+// COLLISION
+function blocked(x,z){
+ for(const b of buildings){
+  if(
+   Math.abs(x-b.x)<b.w/2+1.2 &&
+   Math.abs(z-b.z)<b.d/2+1.2
+  )return true;
+ }
+ return false;
+}
+
+// HUD
+function updateHUD(){
+ document.getElementById("suitStatus").textContent=
+  "SUIT: "+(equipped?"MARK 45 ACTIVE":"NOT EQUIPPED");
+ document.getElementById("flightStatus").textContent=
+  "FLIGHT: "+(flying?"ON":"OFF");
+}
+
+// MOVEMENT
+const clock=new THREE.Clock();
+
+function update(dt){
+ const forwardInput=
+  (keys.w||keys.arrowup?1:0)-
+  (keys.s||keys.arrowdown?1:0)-joyY;
+ const sideInput=
+  (keys.d||keys.arrowright?1:0)-
+  (keys.a||keys.arrowleft?1:0)+joyX;
+
+ const moving=Math.abs(forwardInput)+Math.abs(sideInput)>.05;
+
+ const speed=flying?32:equipped?13:9;
+
+ const direction=new THREE.Vector3(
+  -Math.sin(cameraYaw),0,-Math.cos(cameraYaw)
+ );
+ const right=new THREE.Vector3(
+  Math.cos(cameraYaw),0,-Math.sin(cameraYaw)
+ );
+
+ const movement=direction.multiplyScalar(forwardInput)
+ .add(right.multiplyScalar(sideInput));
+
+ if(movement.length()>1)movement.normalize();
+
+ const nx=player.position.x+movement.x*speed*dt;
+ const nz=player.position.z+movement.z*speed*dt;
+
+ if(!blocked(nx,player.position.z))player.position.x=nx;
+ if(!blocked(player.position.x,nz))player.position.z=nz;
+
+ // World boundaries
+ player.position.x=THREE.MathUtils.clamp(player.position.x,-495,495);
+ player.position.z=THREE.MathUtils.clamp(player.position.z,-495,495);
+
+ if(moving){
+  player.rotation.y=Math.atan2(-movement.x,-movement.z);
+  walkTime+=dt*9;
+  legs[0].rotation.x=Math.sin(walkTime)*.45;
+  legs[1].rotation.x=-Math.sin(walkTime)*.45;
+  arms[0].rotation.x=-Math.sin(walkTime)*.25;
+  arms[1].rotation.x=Math.sin(walkTime)*.25;
+ }else{
+  legs.forEach(l=>l.rotation.x*=.8);
+  arms.forEach(a=>a.rotation.x*=.8);
+ }
+
+ // Flying
+ if(flying){
+  const vertical=(keys[" "]||keys.r?1:0)-
+                 (keys.shift?1:0);
+  player.position.y+=vertical*speed*dt*.65;
+  player.position.y=Math.max(2,Math.min(150,player.position.y));
+  suit.rotation.x=THREE.MathUtils.lerp(
+   suit.rotation.x,forwardInput>0?.12:0,.08
+  );
+ }else{
+  suit.rotation.x*=.9;
+  if(player.position.y>.0){
+   velocityY-=24*dt;
+   player.position.y=Math.max(0,player.position.y+velocityY*dt);
+   if(player.position.y===0)velocityY=0;
+  }
+ }
+
+ // Smooth follow camera
+ const target=new THREE.Vector3(
+  player.position.x,
+  player.position.y+2.3,
+  player.position.z
+ );
+ const dist=cameraDistance;
+ const cx=target.x+Math.sin(cameraYaw)*dist;
+ const cz=target.z+Math.cos(cameraYaw)*dist;
+ const cy=target.y+cameraHeight+pitch*5;
+
+ camera.position.lerp(new THREE.Vector3(cx,cy,cz),.12);
+ camera.lookAt(target);
+
+ // Projectiles
+ updateProjectiles();
+
+ // HUD
+ document.getElementById("altitude").textContent=
+  "ALTITUDE: "+Math.round(player.position.y)+" M";
+ document.getElementById("position").textContent=
+  "WORLD: "+Math.round(player.position.x+500)+", "+
+  Math.round(player.position.z+500);
+
+ if(summonTimer>0)summonTimer-=dt;
+ if(messageTimer>0){
+  messageTimer-=dt;
+  if(messageTimer<=0)
+   document.getElementById("message").textContent="";
+ }
+}
+
+// MAIN LOOP
+function animate(){
+ requestAnimationFrame(animate);
+ const dt=Math.min(clock.getDelta(),.04);
+ update(dt);
+ renderer.render(scene,camera);
+}
+animate();
+
+// RESIZE
+addEventListener("resize",()=>{
+ camera.aspect=innerWidth/innerHeight;
+ camera.updateProjectionMatrix();
+ renderer.setSize(innerWidth,innerHeight);
+});
+
+// Initial camera
+camera.position.set(0,5,10);
+updateHUD();
+showMessage("WELCOME TO IRON MAN OPEN WORLD");
+
+})();
+</script>
+</body>
+</html>
