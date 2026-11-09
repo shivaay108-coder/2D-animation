@@ -1,0 +1,475 @@
+
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>2D Cinematic Story</title>
+
+<style>
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: #05070c;
+  color: white;
+  font-family: Arial, sans-serif;
+  overflow: hidden;
+}
+
+#screen {
+  position: relative;
+  width: 100vw;
+  height: 100dvh;
+  background: #080c14;
+  overflow: hidden;
+}
+
+canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+#cinema {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  box-shadow: inset 0 70px 80px #0008,
+              inset 0 -100px 100px #000b;
+}
+
+#caption {
+  position: absolute;
+  bottom: 100px;
+  left: 5%;
+  width: 90%;
+  text-align: center;
+  font-size: clamp(17px, 4vw, 26px);
+  line-height: 1.5;
+  text-shadow: 0 2px 8px black;
+  transition: opacity 0.5s;
+}
+
+#subtitle {
+  color: #9ceaff;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+#controls {
+  position: absolute;
+  bottom: 22px;
+  left: 0;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+}
+
+button {
+  padding: 12px 22px;
+  border: 1px solid #56dfff;
+  background: #071b2b;
+  color: #d5f8ff;
+  border-radius: 25px;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+button:active {
+  transform: scale(.96);
+}
+
+#title {
+  position: absolute;
+  top: 28px;
+  width: 100%;
+  text-align: center;
+  color: #b5eaff;
+  letter-spacing: 4px;
+  font-size: 13px;
+}
+</style>
+</head>
+
+<body>
+
+<div id="screen">
+
+  <canvas id="game"></canvas>
+
+  <div id="cinema"></div>
+
+  <div id="title">THE LAST NIGHT · 2D CINEMATIC</div>
+
+  <div id="caption">
+    <div id="subtitle">SCENE 01</div>
+    <div id="dialogue">
+      "इस रात में कुछ ऐसा था...
+      जो मुझे बदलने वाला था।"
+    </div>
+  </div>
+
+  <div id="controls">
+    <button onclick="previousScene()">◀ पिछला</button>
+    <button onclick="nextScene()">अगला Scene ▶</button>
+  </div>
+
+</div>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+let W, H, scale;
+let scene = 0;
+let cameraZoom = 1;
+let time = 0;
+
+function resize() {
+  W = window.innerWidth;
+  H = window.innerHeight;
+
+  scale = Math.min(window.devicePixelRatio || 1, 2);
+
+  canvas.width = W * scale;
+  canvas.height = H * scale;
+
+  ctx.setTransform(scale, 0, 0, scale, 0, 0);
+}
+
+window.addEventListener("resize", resize);
+resize();
+
+const stories = [
+  {
+    title: "SCENE 01",
+    text: '"इस रात में कुछ ऐसा था... जो मुझे बदलने वाला था।"',
+    zoom: 1
+  },
+  {
+    title: "SCENE 02",
+    text: '"तभी मुझे सड़क के उस पार एक अजीब सी रोशनी दिखाई दी।"',
+    zoom: 1.12
+  },
+  {
+    title: "SCENE 03",
+    text: '"मैंने कदम बढ़ाया... और मेरी दुनिया बदल गई।"',
+    zoom: 1.3
+  }
+];
+
+function nextScene() {
+  scene = (scene + 1) % stories.length;
+  updateStory();
+}
+
+function previousScene() {
+  scene = (scene - 1 + stories.length) % stories.length;
+  updateStory();
+}
+
+function updateStory() {
+  document.getElementById("subtitle").textContent =
+    stories[scene].title;
+
+  document.getElementById("dialogue").textContent =
+    stories[scene].text;
+}
+
+function drawBackground() {
+
+  // Night sky
+  let sky = ctx.createLinearGradient(0, 0, 0, H);
+
+  sky.addColorStop(0, "#030611");
+  sky.addColorStop(0.45, "#101c32");
+  sky.addColorStop(1, "#10141d");
+
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, W, H);
+
+  // Moonlight
+  ctx.fillStyle = "#c4eaff";
+  ctx.globalAlpha = 0.8;
+
+  ctx.beginPath();
+  ctx.arc(W * 0.76, H * 0.18, H * 0.045, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.globalAlpha = 1;
+
+  // Buildings
+  for (let i = 0; i < 9; i++) {
+
+    let bw = W / 9;
+    let bh = H * (0.25 + (i % 3) * 0.12);
+
+    let x = i * bw;
+    let y = H * 0.47 - bh;
+
+    ctx.fillStyle = i % 2 ? "#101b2a" : "#0b1422";
+    ctx.fillRect(x, y, bw + 3, bh);
+
+    // Windows
+    for (let j = 0; j < 5; j++) {
+
+      for (let k = 0; k < 3; k++) {
+
+        ctx.fillStyle =
+          Math.random() > 0.985 ? "#b4e8ff" : "#18283a";
+
+        ctx.fillRect(
+          x + 8 + k * 15,
+          y + 15 + j * 22,
+          6,
+          10
+        );
+      }
+    }
+  }
+
+  // Road
+  ctx.fillStyle = "#171c24";
+
+  ctx.beginPath();
+  ctx.moveTo(W * 0.35, H * 0.45);
+  ctx.lineTo(W * 0.65, H * 0.45);
+  ctx.lineTo(W * 1.1, H);
+  ctx.lineTo(-W * 0.1, H);
+  ctx.closePath();
+  ctx.fill();
+
+  // Wet road reflections
+  let reflection = ctx.createLinearGradient(0, H * 0.5, 0, H);
+
+  reflection.addColorStop(0, "#25384b");
+  reflection.addColorStop(1, "#080c12");
+
+  ctx.fillStyle = reflection;
+
+  ctx.beginPath();
+  ctx.moveTo(W * 0.48, H * 0.45);
+  ctx.lineTo(W * 0.52, H * 0.45);
+  ctx.lineTo(W * 0.62, H);
+  ctx.lineTo(W * 0.38, H);
+  ctx.closePath();
+
+  ctx.fill();
+
+  // Road markings
+  ctx.strokeStyle = "#8ba8c1";
+  ctx.globalAlpha = 0.2;
+  ctx.lineWidth = 2;
+
+  ctx.beginPath();
+  ctx.moveTo(W * 0.5, H * 0.52);
+  ctx.lineTo(W * 0.5, H);
+  ctx.stroke();
+
+  ctx.globalAlpha = 1;
+}
+
+function drawCharacter(x, y, walk) {
+
+  ctx.save();
+
+  // Shadow
+  ctx.fillStyle = "#0009";
+
+  ctx.beginPath();
+  ctx.ellipse(x, y + 2, 35, 9, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Legs
+  let swing = Math.sin(walk) * 12;
+
+  ctx.strokeStyle = "#090d15";
+  ctx.lineWidth = 13;
+  ctx.lineCap = "round";
+
+  ctx.beginPath();
+  ctx.moveTo(x - 8, y - 38);
+  ctx.lineTo(x - 10 + swing, y);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(x + 8, y - 38);
+  ctx.lineTo(x + 10 - swing, y);
+  ctx.stroke();
+
+  // Shoes
+  ctx.strokeStyle = "#242d39";
+  ctx.lineWidth = 9;
+
+  ctx.beginPath();
+  ctx.moveTo(x - 10 + swing, y);
+  ctx.lineTo(x - 20 + swing, y);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(x + 10 - swing, y);
+  ctx.lineTo(x + 20 - swing, y);
+  ctx.stroke();
+
+  // Body
+  let body = ctx.createLinearGradient(x - 20, 0, x + 20, 0);
+
+  body.addColorStop(0, "#121927");
+  body.addColorStop(0.5, "#303c4f");
+  body.addColorStop(1, "#101724");
+
+  ctx.fillStyle = body;
+
+  ctx.beginPath();
+  ctx.roundRect(x - 18, y - 85, 36, 50, 8);
+  ctx.fill();
+
+  // Arms
+  ctx.strokeStyle = "#171f2b";
+  ctx.lineWidth = 10;
+
+  ctx.beginPath();
+  ctx.moveTo(x - 15, y - 78);
+  ctx.lineTo(x - 23 + swing * 0.4, y - 45);
+  ctx.stroke();
+
+  ctx.beginPath();
+  ctx.moveTo(x + 15, y - 78);
+  ctx.lineTo(x + 23 - swing * 0.4, y - 45);
+  ctx.stroke();
+
+  // Neck
+  ctx.fillStyle = "#a77b68";
+  ctx.fillRect(x - 6, y - 91, 12, 12);
+
+  // Head
+  ctx.fillStyle = "#c79b83";
+
+  ctx.beginPath();
+  ctx.ellipse(x, y - 107, 18, 22, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Hair
+  ctx.fillStyle = "#10131b";
+
+  ctx.beginPath();
+  ctx.arc(x, y - 115, 19, Math.PI, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillRect(x - 18, y - 116, 36, 9);
+
+  // Eye
+  ctx.fillStyle = "#111";
+  ctx.fillRect(x + 7, y - 108, 3, 3);
+
+  // Raincoat collar
+  ctx.fillStyle = "#647b95";
+
+  ctx.beginPath();
+  ctx.moveTo(x - 10, y - 85);
+  ctx.lineTo(x, y - 73);
+  ctx.lineTo(x + 10, y - 85);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+let rain = [];
+
+for (let i = 0; i < 150; i++) {
+
+  rain.push({
+    x: Math.random() * W,
+    y: Math.random() * H,
+    speed: 4 + Math.random() * 8,
+    length: 8 + Math.random() * 15
+  });
+}
+
+function drawRain() {
+
+  ctx.strokeStyle = "#a8dfff";
+  ctx.lineWidth = 1;
+  ctx.globalAlpha = 0.35;
+
+  rain.forEach(r => {
+
+    ctx.beginPath();
+
+    ctx.moveTo(r.x, r.y);
+    ctx.lineTo(r.x - 4, r.y + r.length);
+
+    ctx.stroke();
+
+    r.y += r.speed;
+    r.x -= 1;
+
+    if (r.y > H) {
+      r.y = -20;
+      r.x = Math.random() * W;
+    }
+  });
+
+  ctx.globalAlpha = 1;
+}
+
+function drawLight() {
+
+  let x = W * (scene === 0 ? 0.76 : 0.5);
+  let y = H * 0.65;
+
+  let glow = ctx.createRadialGradient(
+    x, y, 5,
+    x, y, H * 0.4
+  );
+
+  glow.addColorStop(0, "#4bcfff35");
+  glow.addColorStop(1, "#4bcfff00");
+
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, W, H);
+}
+
+function animate() {
+
+  time += 0.03;
+
+  ctx.clearRect(0, 0, W, H);
+
+  cameraZoom +=
+    (stories[scene].zoom - cameraZoom) * 0.01;
+
+  ctx.save();
+
+  ctx.translate(W / 2, H / 2);
+  ctx.scale(cameraZoom, cameraZoom);
+  ctx.translate(-W / 2, -H / 2);
+
+  drawBackground();
+  drawLight();
+
+  let characterX =
+    W * 0.5 + Math.sin(time * 0.5) * 4;
+
+  let characterY =
+    H * 0.78 + Math.sin(time * 2) * 2;
+
+  drawCharacter(characterX, characterY, time * 3);
+
+  drawRain();
+
+  ctx.restore();
+
+  requestAnimationFrame(animate);
+}
+
+animate();
+</script>
+
+</body>
+</html>
